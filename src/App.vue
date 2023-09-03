@@ -4,7 +4,7 @@
 
 <script>
 import ScoreBoard from './components/ScoreBoard.vue';
-import { getSchedule, getCurrentPlay } from './helpers';
+import { getSchedule, getCurrentPlay, getCurrentBases } from './helpers';
 
 export default {
   name: 'App',
@@ -31,18 +31,25 @@ export default {
         topHalf: true,
         inning: 1,
         active: false,
+        description: null,
       }
       return data
     })
+    console.log('games', this.games)
+
+    // this.games = [this.games[0]]
 
     const gameIds = this.games.map(game => game.id)
-    console.log(gameIds)
 
     const updateScoreboards = async () => {
+      const basePositions = await Promise.all(gameIds.map(id => getCurrentBases(id)))
       const plays = await Promise.all(gameIds.map(id => getCurrentPlay(id)))
+
       console.log('current plays', plays)
       plays.forEach(play => {
         const game = this.games.find(game => game.id === play.id)
+        const bases = basePositions.find(state => state.id === play.id)
+
         console.log('PLAY', play)
         const {active} = play
 
@@ -55,7 +62,8 @@ export default {
           strikes,
           balls,
           inning,
-          outs
+          outs,
+          description
         //   firstBase, 
         //   secondBase, 
         //   thirdBase, 
@@ -72,6 +80,7 @@ export default {
         game.topHalf = isTopInning
         game.pitches = `${balls}-${strikes}`
         game.inning = inning
+        game.description = description
 
         let firstOut = false
         let secondOut = false
@@ -80,14 +89,13 @@ export default {
         game.firstOut = firstOut
         game.secondOut = secondOut
 
-        const {bases} = play
-        game.firstBase = bases.includes('1B') || false
-        game.secondBase = bases.includes('2B') || false
-        game.thirdBase = bases.includes('3B') || false
+        game.firstBase = bases.first
+        game.secondBase = bases.second
+        game.thirdBase = bases.third
       })
     }
 
-    setInterval(updateScoreboards, 1000)
+    setInterval(() => updateScoreboards(), 1000)
 
   },
   data: function () {

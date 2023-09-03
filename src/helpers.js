@@ -83,6 +83,70 @@ export const getPlayByPlay = async (gameId) => {
     return allPlayResults
 }
 
+export const getBasePositions = async (gameId) => {
+    const playByPlayUrl = `https://statsapi.mlb.com/api/v1/game/${gameId}/playByPlay`
+    const playByPlayResponse = await fetch(playByPlayUrl)
+    const playByPlayJson = await playByPlayResponse.json()
+    const {allPlays} = playByPlayJson
+
+    const basePositions = []
+    allPlays.forEach(play => {
+        const {runners} = play
+        const positions = runners.map(runner => {
+            const {end, isOut} = runner.movement
+            console.log('end', end)
+            if (isOut) {
+                return 'out'
+            }
+            return end
+        })
+        console.log('ARRAY', basePositions)
+
+        const state = {
+            first: positions.includes('1B'),
+            second: positions.includes('2B'),
+            third: positions.includes('3B'),
+            exitField: positions.includes('score') || basePositions.includes('out'),
+        }
+        basePositions.push(state)
+    })
+    console.log('BASES ALLL', basePositions)
+    return basePositions
+}
+
+export const getCurrentBases = async (gameId) => {
+    const basePositions = await getBasePositions(gameId)
+    console.log('BASES all', basePositions)
+    let currentState = {
+        id: gameId,
+        first: false,
+        second: false,
+        third: false,
+    }
+    basePositions.forEach(state => {
+        const keys = ['first', 'second', 'third']
+        // use empty bases
+        if (keys.every(key => !state[key])) {
+            if (state.exitField) {
+                currentState = {
+                    id: gameId,
+                    first: false,
+                    second: false,
+                    third: false,
+                }
+            } else {
+                // ignore
+                return
+            }
+        }
+        keys.forEach(key => {
+            currentState[key] = state[key]
+        })
+    })
+    console.log('BASES', currentState)
+    return currentState
+}
+
 export const getCurrentPlay = async (gameId) => {
     const playByPlayUrl = `https://statsapi.mlb.com/api/v1/game/${gameId}/playByPlay`
     const playByPlayResponse = await fetch(playByPlayUrl)
@@ -107,7 +171,7 @@ export const getCurrentPlay = async (gameId) => {
         return end
     }).filter(position => position)
     
-    return {
+    const playInfo = {
         id: gameId,
         active: true,
         bases: basePositions,
@@ -115,4 +179,6 @@ export const getCurrentPlay = async (gameId) => {
         ...currentPlay.count,
         ...currentPlay.about,
     }
+    console.log('PLAY', playInfo)
+    return playInfo
 }

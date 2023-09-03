@@ -9,9 +9,9 @@
 
     <div class="inning-info">
       <div class="bases">
-        <div class="base first" :class="{'runner': firstBase}"></div>
-        <div class="base second" :class="{'runner': secondBase}"></div>
         <div class="base third" :class="{'runner': thirdBase}"></div>
+        <div class="base second" :class="{'runner': secondBase}"></div>
+        <div class="base first" :class="{'runner': firstBase}"></div>
       </div>
 
       <div class="outs">
@@ -26,6 +26,9 @@
         <div class="inning-number">{{ inning }}</div>
       </div>
     </div>
+  </div>
+  <div class="description">
+    <p>{{ description }}</p>
   </div>
 </template>
 
@@ -46,6 +49,7 @@ export default {
     inning: Number,
     topHalf: Boolean,
     active: Boolean,
+    description: String,
   }
 }
 </script>
@@ -151,6 +155,23 @@ export default {
 
 .inning .half.bottom {
   transform: rotate(180deg);
+}
+
+.description {
+  /* padding: 1em; */
+  width: 300px;
+  margin: 1em auto;
+  background-color: #728799;
+  color: white;
+  /* text-indent: 1em; */
+  /* opacity: .5; */
+  text-align: left;
+  transition: opacity .25s ease-in-out;
+}
+
+.description p {
+  margin: 0;
+  font-size: .9em;
 }
 
 </style>

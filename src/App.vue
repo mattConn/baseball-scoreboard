@@ -1,10 +1,47 @@
 <template>
-  <ScoreBoard v-for="game in games" :key="game.home" v-bind="game" />
+  <!-- <p class="time">{{ currentTime }}</p> -->
+  <div class="games">
+    <div id="current-games">
+      <div v-for="game in games" :key="game.id">
+        <p class="game" :class="{'current-game': currentGame?.id == game.id}" @click="gameClickHandler(game.id)">{{ `${game.away}@${game.home}` }}</p>
+      </div>
+    </div>
+
+    <div id="data-ctn" v-if="currentGame">
+      <ScoreBoard
+        :home="currentGame.home"
+        :away="currentGame.away"
+        v-bind="currentPlay"
+        :firstOut="currentPlay?.outs >= 1"
+        :secondOut="currentPlay?.outs >= 2"
+        :balls="currentPlay?.balls"
+        :strikes="currentPlay?.strikes"
+        :topHalf="currentPlay?.isTopInning"
+      />
+      <div id="views">
+        <p v-for="(modeName, mode) in modes" :key="mode" :class="{'active-view': currentMode === mode}" @click="setMode(mode)">{{ modeName }}</p>
+      </div>
+
+      <table class="table" v-if="currentData">
+        <tr>
+          <th v-for="(header, headerIndex) in currentData[0]" :key="headerIndex" @click="tableHeaderClickHandler(headerIndex)">{{ header }}</th>
+        </tr>
+        <tr class="row" v-for="(row, rowIndex) in currentData?.slice(1)" :key="rowIndex">
+          <td class="cell" v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td>
+        </tr>
+      </table>
+
+    </div>
+    <div v-else>
+      <p>Select today's game</p>
+    </div>
+  </div>
 </template>
 
+
 <script>
-import ScoreBoard from './components/ScoreBoard.vue';
-import { getSchedule, getCurrentPlay, getCurrentBases } from './helpers';
+import { getSchedule, getPlayByPlayData, getPitchSpeedData, getCurrentPlay, getTodaysDate } from './helpers2';
+import ScoreBoard from './components/ScoreBoard.vue'
 
 export default {
   name: 'App',
@@ -12,95 +49,141 @@ export default {
     ScoreBoard
   },
   async created() {
-    const schedule = await getSchedule()
+    await this.init()
+  },
+  methods: {
+    async init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const gameId = urlParams.get('gameid');
+      const mode = urlParams.get('mode');
+      const date = urlParams.get('date');
 
-    this.games = schedule.map(game => {
-      const { away, home, id } = game
-      const data = {
-        id,
-        home,
-        away,
-        homeScore: 0,
-        awayScore: 0,
-        firstBase: false,
-        secondBase: false,
-        thirdBase: false,
-        firstOut: false,
-        secondOut: false,
-        pitches: '0-0',
-        topHalf: true,
-        inning: 1,
-        active: false,
-        description: null,
+      // if (date) {
+      //   this.date = date
+      // } else {
+      //   this.date = getTodaysDate()
+      // }
+
+      this.date = getTodaysDate()
+
+      const schedule = await getSchedule(this.date)
+      schedule.forEach(game => this.games.push(game))
+      if (!gameId) {
+        return
       }
-      return data
-    })
-    console.log('games', this.games)
+      this.currentGame = this.games.find(game => game.id == gameId)
+      document.title = `${this.currentGame.away}@${this.currentGame.home}`;
 
-    // this.games = [this.games[0]]
+      this.currentMode = mode
 
-    const gameIds = this.games.map(game => game.id)
+      this.playByPlay = await getPlayByPlayData(this.currentGame.id)
+      this.pitchSpeedData = getPitchSpeedData(this.playByPlay)
+      this.currentPlay = await getCurrentPlay(this.currentGame.id)
 
-    const updateScoreboards = async () => {
-      const basePositions = await Promise.all(gameIds.map(id => getCurrentBases(id)))
-      const plays = await Promise.all(gameIds.map(id => getCurrentPlay(id)))
+      this.modesToData = {
+        play: this.playByPlay,
+        speed: this.pitchSpeedData,
+        results: null,
+      }
 
-      console.log('current plays', plays)
-      plays.forEach(play => {
-        const game = this.games.find(game => game.id === play.id)
-        const bases = basePositions.find(state => state.id === play.id)
+      this.currentData = this.modesToData[this.currentMode]
+      console.log('this.currentData', this.currentData)
+      // get current time as hh:mm:ss
+      this.currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-        console.log('PLAY', play)
-        const {active} = play
 
-        if (!active) return
+      this.intervalId = setInterval(async () => {
+        console.log('getting data')
+        this.playByPlay = await getPlayByPlayData(this.currentGame.id)
+        this.pitchSpeedData = getPitchSpeedData(this.playByPlay)
+        this.currentPlay = await getCurrentPlay(this.currentGame.id)
 
-        const { 
-          homeScore, 
-          awayScore,
-          isTopInning,
-          strikes,
-          balls,
-          inning,
-          outs,
-          description
-        //   firstBase, 
-        //   secondBase, 
-        //   thirdBase, 
-        //   firstOut, 
-        //   secondOut, 
-        //   pitches, 
-        //   topHalf, 
-        //   inning 
-        } = play
+        // get current time as hh:mm:ss
+        this.currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-        game.active = active
-        game.homeScore = homeScore
-        game.awayScore = awayScore 
-        game.topHalf = isTopInning
-        game.pitches = `${balls}-${strikes}`
-        game.inning = inning
-        game.description = description
+        this.modesToData = {
+          play: this.playByPlay,
+          speed: this.pitchSpeedData,
+          results: null,
+        }
+        const data = this.modesToData[this.currentMode]
+        const headerIndex = this.sortIndex
+        this.currentData = null
+        this.currentData = data
+        this.sortByColumn(headerIndex)
+      }, 1000)
+    },
+    async dateSelector(next = false) {
+      const date = this.date.split('-').map(n => Number(n))
+      let [year, month, day] = date
+      if (next) {
+        day += 1
+      } else {
+        day -=1
+      }
+      
+      const newDate = `${year}-${month}-${day}`
+      window.history.pushState({}, '', `/?date=${newDate}`);
+      // refresh page
+      window.location.reload()
+      // this.date = `${year}-${month}-${day}`
+    },
+    tableHeaderClickHandler(headerIndex) {
+      this.sorted = !this.sorted
+      this.sortByColumn(headerIndex)
+    },
+    sortByColumn(headerIndex){
+      const data = this.currentData?.slice(1)
+      if (!data) return
 
-        let firstOut = false
-        let secondOut = false
-        if (outs >= 1) firstOut = true
-        if (outs >= 2) secondOut = true
-        game.firstOut = firstOut
-        game.secondOut = secondOut
+      this.sortIndex = headerIndex
+      if (this.sorted) {
+        data.sort((a,b) => b[headerIndex] - a[headerIndex])
+      } else {
+        data.sort((a,b) => a[headerIndex] - b[headerIndex])
+      }
+      this.currentData = [this.currentData[0], ...data]
+    },
+    gameClickHandler(gameId) {
+      let href = `/?gameid=${gameId}&mode=${this.currentMode || 'play'}`
+      const mode = new URLSearchParams(window.location.search).get('mode')
+      if (mode) {
+        href += `&mode=${mode}`
+      }
 
-        game.firstBase = bases.first
-        game.secondBase = bases.second
-        game.thirdBase = bases.third
-      })
+      const date = new URLSearchParams(window.location.search).get('date')
+      if (date) {
+        href += `&date=${date}`
+      }
+      window.location.href = href
+    },
+    setMode(mode) {
+      this.currentMode = mode
+      // push to url params
+      window.history.pushState({}, '', `/?gameid=${this.currentGame.id}&mode=${mode}`);
+      this.currentData = this.modesToData[this.currentMode]
+      console.log('this.currentData', this.currentData)
     }
-
-    setInterval(() => updateScoreboards(), 1000)
-
   },
   data: function () {
     return {
-      games: []
+      date: null,
+      currentTime: '00:00:00 PM',
+      currentPlay: null,
+      currentData: null,
+      sorted: false,
+      modes: {
+        play: 'Play by Play',
+        speed: 'Speed',
+        results: 'Results',
+      },
+      modesToData: null,
+      currentMode: 'play',
+      games: [],
+      currentGame: null,
+
+      pitchSpeedData: null,
+      playByPlay: null,
     }
   }
 }
@@ -117,6 +200,90 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-  margin-top: 60px;
+  font-family: sans-serif;
+  color: white;
+}
+
+#current-games {
+  display: flex;
+  color: white;
+  justify-content: space-between;
+  align-items: center;
+  overflow: scroll;
+  height: 5em;
+}
+#current-games p {
+  margin: 0 1em;
+  cursor: pointer;
+}
+#current-games p.current-game {
+  background-color: #7f9ab5;
+  color:#2c3e50;
+}
+#current-games p:hover {
+  text-decoration: underline;
+}
+
+#data-ctn {
+  /* margin-top: 1em; */
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.table th {
+  padding: 1em;
+  text-align: left;
+  background-color: #728799;
+  color: white;
+  text-align: center;
+  cursor: pointer;
+}
+
+.time {
+  text-align: left;
+}
+
+.table th:hover {
+  text-decoration: underline;
+}
+
+.row:nth-child(even) {
+  background-color: #7f9ab594;
+}
+
+#views {
+  display: flex;
+  justify-content: space-around;
+}
+
+#views p {
+  cursor: pointer;
+}
+
+#views p:hover {
+  text-decoration: underline;
+}
+
+.active-view {
+  text-decoration: underline;
+}
+
+.date-selector {
+  cursor: pointer;
+}
+
+.date::selection {
+  background-color: transparent;
+}
+ 
+.date-selector:hover {
+  text-decoration: underline;
+}
+
+.date-selector::selection {
+  background-color: transparent;
 }
 </style>

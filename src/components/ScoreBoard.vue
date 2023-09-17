@@ -8,18 +8,20 @@
     </div>
 
     <div class="inning-info">
-      <div class="bases">
+      <!-- <div class="bases">
         <div class="base third" :class="{'runner': thirdBase}"></div>
         <div class="base second" :class="{'runner': secondBase}"></div>
         <div class="base first" :class="{'runner': firstBase}"></div>
-      </div>
+      </div> -->
 
       <div class="outs">
         <div class="out first-out" :class="{active: firstOut}"></div>
         <div class="out second-out" :class="{active: secondOut}"></div>
       </div>
 
-      <div class="pitches">{{ pitches }}</div>
+      <div class="balls-strikes">
+        {{ balls }}-{{ strikes }}
+      </div>
 
       <div class="inning">
         <div class="half" :class="{bottom: !topHalf}"></div>
@@ -50,6 +52,8 @@ export default {
     topHalf: Boolean,
     active: Boolean,
     description: String,
+    balls: Number,
+    strikes: Number
   }
 }
 </script>
@@ -59,6 +63,7 @@ export default {
 .scoreboard {
   width: 300px;
   margin: 1em auto;
+  padding-bottom: 1em;
   background-color: white;
   opacity: .5;
   transition: opacity .25s ease-in-out;
@@ -80,9 +85,14 @@ export default {
   color: white;
 }
 
+.home-logo, .away-logo {
+  color: black;
+}
+
 .inning-info {
   display: flex;
   margin-top: 1em;
+  color: black
 }
 
 .scores div, .inning-info div {
